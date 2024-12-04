@@ -7,9 +7,9 @@ import time
 class Command(BaseCommand):
     help = 'create a movie database which contains appr. 10000 movie from https://www.themoviedb.org/ API'
 
-    api_read_token = "" # write your api read token here.
+    api_read_token = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1OTIyOTlmZGU1MjRiNDg3NzVlMDc5ZTAzMzU3ZWI0NyIsIm5iZiI6MTczMzE2NjA0OC4xNDYsInN1YiI6IjY3NGUwM2UwMGU4M2U0YmUyNTJjZTcwZSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.i-2XMv5A_-PDRHDixG_OkMERvHk3klLA_9bFieeovB8" # write your api read token here.
 
-    api_key = "" # write your api key here.
+    api_key = "592299fde524b48775e079e03357eb47" # write your api key here.
 
     def get_all_genres(self):
         url = f'https://api.themoviedb.org/3/genre/movie/list?api_key={self.api_key}'
@@ -50,7 +50,7 @@ class Command(BaseCommand):
         print(f"Thread {threading.current_thread().name}")
         for page in range(start_page,end_page):
             print("PAGE:", page)
-            url = f'https://api.themoviedb.org/3/discover/movie?api_key={self.api_key}&include_adult=false&language=en-US&page={page}&sort_by=release_date.desc'
+            url = f'https://api.themoviedb.org/3/discover/movie?api_key={self.api_key}&include_adult=false&language=en-US&page={page}'  #desc to latest #asc to oldest #nothing to nothing
             
             response = requests.get(url)
             for movie_data in response.json().get('results'):
@@ -73,7 +73,10 @@ class Command(BaseCommand):
                         'release_date': release_date,
                         'popularity': popularity,
                         'video': video,
-                    })
+                    
+                    },
+                    viewed = False
+                    )
                     if created:       
                             for genre_name in genres:
                                 genre_obj, _ = Genre.objects.get_or_create(title=genre_name)

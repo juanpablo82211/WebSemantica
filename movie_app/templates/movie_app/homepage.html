@@ -4,7 +4,25 @@
 {%block metatitle%}MovieApp{%endblock%}
 
 {%block content%}
+
 <div class="container">
+
+    {% if recommended_movies %}
+    <h3>Recommended Movies</h3>
+    <ul>
+        {% for movie in recommended_movies %}
+            <li>
+                <a href="{% url 'movie_app:movie_detail_view' movie.slug %}">
+                    {{ movie.title }} (Released: {{ movie.release_date }})
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>No recommendations available. Please interact with movies to get personalized suggestions.</p>
+{% endif %}
+
+
     <div class="row">
         <div class="col-sm-12 col-lg-9 border rounded-4 mt-5 p-3">
             <div class="row">

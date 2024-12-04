@@ -2,10 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.urls import reverse
 from django.core.paginator import Paginator
-
+from django.shortcuts import render
+from .rdf_handler import RDFDataHandler
 from django.contrib.auth import authenticate, login, logout
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
+from .models import MovieClick
+
 
 # Python imports
 import datetime
@@ -20,24 +24,66 @@ from movie_app.forms import CommentForm, UserSignUpForm, UserLoginForm, ChangeUs
 
 
 # Views
+from django.shortcuts import render
+from .rdf_handler import RDFDataHandler
 
 def homepage(request):
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    popular_movies = Movie.objects.order_by('-popularity').filter(is_active=True)[:6] # Most popular 6 Movies
-    latest_movies = Movie.objects.order_by('-release_date').filter(is_active=True, release_date__range=("2004-01-01", today))
-    paginator = Paginator(latest_movies, 20)
-    page_number = request.GET.get("page")
-    last_movies = paginator.get_page(page_number,)
-    context = dict(popular_movies=popular_movies, last_movies=last_movies)
-    return render(request, 'movie_app/homepage.html', context=context)
-        
+    if request.user.is_authenticated:
+        # Si el usuario está logueado, obtener recomendaciones personalizadas
+        recommended_movies = recommend_movies_for_user(request.user)
+    else:
+        # Si no está logueado, no mostrar recomendaciones
+        recommended_movies = []
 
+    # Ruta al archivo RDF
+    rdf_file = "movie.rdf"
+    rdf_handler = RDFDataHandler(rdf_file)
+    
+    # Consulta SPARQL para obtener películas
+    query = """
+    PREFIX ns0: <http://example.org/movies/>
+    SELECT ?title ?release_date ?poster WHERE {
+        ?movie ns0:title ?title . 
+        ?movie ns0:release_date ?release_date . 
+        ?movie ns0:poster ?poster .
+    } ORDER BY DESC(?release_date) LIMIT 100
+    """
+    results = rdf_handler.execute_query(query)
+
+    # Convertir resultados a una lista de diccionarios
+    movies = [
+        {"title": str(row["title"]), "release_date": str(row["release_date"]), "poster": str(row["poster"])}
+        for row in results
+    ]
+
+    context = {
+        "popular_movies": movies,
+        "latest_movies": movies,
+        "recommended_movies": recommended_movies,  # Se pasan las recomendaciones
+    }
+    return render(request, "movie_app/homepage.html", context)
+
+# def homepage(request):
+#     today = datetime.datetime.now().strftime("%Y-%m-%d")
+#     popular_movies = Movie.objects.order_by('-popularity').filter(is_active=True)[:6] # Most popular 6 Movies
+#     latest_movies = Movie.objects.order_by('-release_date').filter(is_active=True, release_date__range=("2004-01-01", today))
+#     paginator = Paginator(latest_movies, 20)
+#     page_number = request.GET.get("page")
+#     last_movies = paginator.get_page(page_number,)
+#     context = dict(popular_movies=popular_movies, last_movies=last_movies)
+#     return render(request, 'movie_app/homepage.html', context=context)
+        
 def most_popular_movies_view(request):
-    popular_movies = Movie.objects.order_by('-popularity').filter(is_active=True)
+    popular_movies = Movie.objects.order_by('-popularity').filter(is_active=True)[:10]
     paginator = Paginator(popular_movies, 20)
     page_number = request.GET.get("page")
-    p_movies = paginator.get_page(page_number,)
-    context = dict(popular_movies=p_movies, page_title='Most Popular Movies')
+    p_movies = paginator.get_page(page_number)
+    page_title = f"Welcome, {request.user.username}"
+    
+    context = {
+        'popular_movies': p_movies,
+        'page_title': page_title,
+    }
     return render(request, 'movie_app/most-popular-movies.html', context=context)
 
 
@@ -191,3 +237,33 @@ def update_profile_view(request):
         return redirect(profile.get_absolute_url())
     context = dict(form=form, page_title = f'{request.user.username} Profile Update')
     return render(request, 'registration/authentication.html', context=context)
+
+def recommend_movies_for_user(user):
+    # Obtener las películas más clicadas por el usuario, con la cantidad de clics
+    user_interactions = MovieClick.objects.filter(user=user).values('movie').annotate(num_clicks=Count('movie')).order_by('-num_clicks')
+
+    if not user_interactions:
+        return []  # Si no hay interacciones, no hay recomendaciones
+
+    # Obtener los IDs de las películas más clicadas
+    movie_ids = [interaction['movie'] for interaction in user_interactions]
+
+    # Si se tienen IDs de películas, obtener las películas correspondientes
+    if movie_ids:
+        recommended_movies = Movie.objects.filter(id__in=movie_ids).order_by('-release_date')[:10]  # Top 10 más recientes
+        return recommended_movies
+    return []  # Si no se encuentran películas, devolver una lista vacía
+
+
+# Ejemplo de cómo registrar un clic de película
+def movie_click_view(request, movie_id):
+    movie = get_object_or_404(Movie, id=movie_id)
+
+    if request.user.is_authenticated:
+        print(f"User {request.user.username} clicked on {movie.title}")
+        MovieClick.objects.create(user=request.user, movie=movie)
+        messages.success(request, "Your click was registered!")
+    else:
+        print("User is not authenticated")
+
+    return redirect('movie_app:movie_detail_view', movie_slug=movie.slug)

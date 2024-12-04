@@ -19,4 +19,5 @@ urlpatterns = [
     path("signup/", views.signup_View, name='signup'),
     path('logout/', views.logout_view, name="logout"),
     path('s', views.search, name="search"),
+    path('movie/<int:movie_id>/click/', views.movie_click_view, name='movie_click'),
 ]
